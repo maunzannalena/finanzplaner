@@ -9,9 +9,14 @@ import type { AppData, Id, NewRow, RowPatch, Settings } from "./types";
 
 const NUMERIC_FIELDS = new Set(["amount", "savings_value", "starting_balance"]);
 
-/** PostgREST may return numeric columns as strings; coerce them. */
+/**
+ * PostgREST may return numeric columns as strings; coerce them. `created_at` is
+ * DB-only bookkeeping and is dropped so rows look exactly like the mock layer's
+ * (otherwise it would leak into re-created rows, e.g. new fixed-row versions).
+ */
 function normalize<T>(row: Record<string, unknown>): T {
-  const out: Record<string, unknown> = { ...row };
+  const { created_at: _createdAt, ...out } = row;
+  void _createdAt;
   for (const key of NUMERIC_FIELDS) {
     if (typeof out[key] === "string") out[key] = Number(out[key]);
   }

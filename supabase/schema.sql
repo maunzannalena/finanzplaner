@@ -93,9 +93,14 @@ create table if not exists debts (
   note          text not null default '',
   due_date      date,
   installments  int check (installments is null or installments >= 1),
+  -- installments already settled (partial payment); the app treats >= installments as fully paid
+  paid_installments int not null default 0 check (paid_installments >= 0),
   paid          boolean not null default false,
   created_at    timestamptz not null default now()
 );
+
+-- Upgrade path for databases created before partial payments existed (safe to re-run).
+alter table debts add column if not exists paid_installments int not null default 0 check (paid_installments >= 0);
 
 create table if not exists savings_transactions (
   id          uuid primary key default gen_random_uuid(),
@@ -136,10 +141,14 @@ end $$;
 -- Seed: only the reference data from the data model (no sample transactions)
 -- ---------------------------------------------------------------------------
 
--- Starting balances stay 0 here: Ana enters the real balances in the app (Konten page).
+-- Starting balances stay 0 here: Anna enters the real balances in the app (Konten page).
 insert into accounts (name)
-select v from (values ('Sparkasse'), ('Revolut Personal'), ('Revolut Ahorro')) as s(v)
+select v from (values ('Sparkasse'), ('Revolut Privat'), ('Revolut Sparen')) as s(v)
 where not exists (select 1 from accounts);
+
+-- Databases seeded before the German account names existed (safe to re-run).
+update accounts set name = 'Revolut Privat' where name = 'Revolut Personal';
+update accounts set name = 'Revolut Sparen' where name = 'Revolut Ahorro';
 
 insert into categories (name)
 select v from (values ('Essen'), ('Freizeit')) as s(v)
@@ -149,5 +158,5 @@ insert into settings (savings_mode, savings_value, language, savings_source_acco
 select
   'percentage', 10, 'de',
   (select id from accounts where name = 'Sparkasse' limit 1),
-  (select id from accounts where name = 'Revolut Ahorro' limit 1)
+  (select id from accounts where name = 'Revolut Sparen' limit 1)
 where not exists (select 1 from settings);

@@ -4,8 +4,9 @@ import { useState, type FormEvent } from "react";
 import type { ExpenseVariable } from "@/lib/data/types";
 import { useI18n } from "@/lib/i18n";
 import { useData, useStore } from "@/lib/store";
-import { amountToInput, parseAmount } from "@/lib/format";
+import { amountToInput, formatMoney, parseAmount } from "@/lib/format";
 import { todayISO } from "@/lib/dates";
+import { savingsBalance } from "@/lib/calc";
 import { Button } from "@/components/ui/Button";
 import { AmountInput, Checkbox, Field, FormActions, Select, TextInput } from "@/components/ui/Field";
 import { DeleteButton } from "@/components/ui/DeleteButton";
@@ -18,7 +19,8 @@ export function VariableExpenseForm({ initial, onClose, defaults }: {
   defaults?: Partial<Pick<ExpenseVariable, "paid_from_savings" | "date">>;
 }) {
   const { t } = useI18n();
-  const { accounts, categories } = useData();
+  const data = useData();
+  const { accounts, categories } = data;
   const { addVariableExpense, updateVariableExpense, removeVariableExpense, addCategory } = useStore();
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(amountToInput(initial?.amount));
@@ -29,6 +31,12 @@ export function VariableExpenseForm({ initial, onClose, defaults }: {
   const [fromSavings, setFromSavings] = useState(initial?.paid_from_savings ?? defaults?.paid_from_savings ?? false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Savings that can still cover this expense. When editing an expense that is already
+  // paid from savings, its own withdrawal is added back so the check compares fairly.
+  const available = savingsBalance(data.savingsTransactions) + (initial?.paid_from_savings ? initial.amount : 0);
+  const parsed = parseAmount(amount);
+  const exceedsSavings = fromSavings && parsed !== null && parsed > available;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -86,6 +94,12 @@ export function VariableExpenseForm({ initial, onClose, defaults }: {
         </Field>
       </div>
       <Checkbox checked={fromSavings} onChange={setFromSavings} label={`🐷 ${t("variable.paidFromSavings")}`} hint={t("variable.paidFromSavingsHint")} />
+      {fromSavings && (
+        <p className={`-mt-2 mb-4 rounded-2xl px-4 py-2 text-xs font-semibold ${exceedsSavings ? "bg-warn-soft text-warn" : "bg-savings-soft text-savings-dark"}`}>
+          {t("savings.available")}: <span className="tnum">{formatMoney(available)}</span>
+          {exceedsSavings && ` · ${t("savings.moreThanBalance")}`}
+        </p>
+      )}
       {err && <p className="mb-3 text-sm font-semibold text-danger">{err}</p>}
       <FormActions>
         {initial && <DeleteButton loading={busy} onConfirm={async () => { setBusy(true); await removeVariableExpense(initial.id); setBusy(false); onClose(); }} />}

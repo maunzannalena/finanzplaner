@@ -14,7 +14,7 @@ Ohne Supabase-Konfiguration läuft die App im **Demo-Modus** mit Beispieldaten i
 ## Supabase anbinden (Phase 2)
 
 1. Neues Supabase-Projekt anlegen.
-2. Inhalt von [`supabase/schema.sql`](supabase/schema.sql) im SQL-Editor ausführen. Das legt alle Tabellen an und seedet nur die Stammdaten (Konten „Sparkasse“, „Revolut Personal“ und „Revolut Ahorro“ mit Startsaldo 0, Kategorien „Essen“ und „Freizeit“, eine Settings-Zeile mit Sparkasse als Quell- und Revolut Ahorro als Sparkonto). Keine erfundenen Beträge.
+2. Inhalt von [`supabase/schema.sql`](supabase/schema.sql) im SQL-Editor ausführen. Das legt alle Tabellen an und seedet nur die Stammdaten (Konten „Sparkasse“, „Revolut Privat“ und „Revolut Sparen“ mit Startsaldo 0, Kategorien „Essen“ und „Freizeit“, eine Settings-Zeile mit Sparkasse als Quell- und Revolut Sparen als Sparkonto). Keine erfundenen Beträge.
 5. Nach dem ersten Start auf der Seite **Konten** für jedes Konto den echten Kontostand und das Datum eintragen, an dem er galt.
 3. `.env.example` nach `.env.local` kopieren und die zwei Werte aus *Project Settings → API* eintragen:
 
@@ -24,6 +24,8 @@ Ohne Supabase-Konfiguration läuft die App im **Demo-Modus** mit Beispieldaten i
    ```
 
 4. `npm run dev` neu starten. Die App erkennt die Variablen und nutzt ab sofort Supabase (im Header verschwindet „Demo“).
+
+Bestehende Datenbank aktualisieren: `supabase/schema.sql` einfach erneut ausführen – alle Anweisungen sind idempotent (`create table if not exists`, `alter table … add column if not exists`), vorhandene Daten bleiben erhalten.
 
 Die Umschaltung passiert in [`lib/data/index.ts`](lib/data/index.ts): sind beide Variablen gesetzt, wird [`lib/data/supabase.ts`](lib/data/supabase.ts) verwendet, sonst [`lib/data/mock.ts`](lib/data/mock.ts). Beide implementieren dieselbe `DataApi`-Schnittstelle aus [`lib/data/api.ts`](lib/data/api.ts).
 
@@ -36,6 +38,14 @@ Die Umschaltung passiert in [`lib/data/index.ts`](lib/data/index.ts): sind beide
 
 Die Seite hat keinen Login. `robots.txt` (aus [`app/robots.ts`](app/robots.ts)) verbietet allen Suchmaschinen die Indexierung, zusätzlich ist `noindex` als Meta-Tag gesetzt. Wer die URL kennt, kann die App benutzen.
 
+### Supabase Free-Tier wach halten
+
+Supabase pausiert kostenlose Projekte nach **7 Tagen ohne API-Aktivität**; die App würde dann „Daten konnten nicht geladen werden“ zeigen, bis das Projekt im Supabase-Dashboard wieder aktiviert wird. Damit das nicht passiert, ruft ein Vercel-Cron-Job ([`vercel.json`](vercel.json), täglich 06:00 UTC) die Route [`/api/keepalive`](app/api/keepalive/route.ts) auf, die eine winzige Lese-Abfrage (`settings`, eine Zeile) über die REST-API macht. Das zählt als Aktivität; es wird nichts geschrieben.
+
+- Läuft automatisch nach dem Deploy, keine weitere Konfiguration nötig (der Hobby-Plan erlaubt einen täglichen Cron).
+- Optional: Umgebungsvariable `CRON_SECRET` in Vercel setzen – dann akzeptiert die Route nur noch Aufrufe des Crons (Vercel schickt den Wert automatisch als `Authorization: Bearer …`).
+- Prüfen: `https://<deine-app>.vercel.app/api/keepalive` liefert `{"ok":true,…}`; im Vercel-Dashboard unter *Settings → Cron Jobs* sieht man die letzten Läufe.
+
 ## Wie die App rechnet
 
 - **Frei verfügbar** = Einnahmen des Monats (feste + einmalige) − aktive Fixkosten − Rücklage des Monats.
@@ -43,8 +53,11 @@ Die Seite hat keinen Login. `robots.txt` (aus [`app/robots.ts`](app/robots.ts)) 
 - **Aus Rücklagen bezahlt**: Eine variable Ausgabe mit gesetztem `paid_from_savings` erzeugt automatisch eine verknüpfte Entnahme (`savings_transactions.expense_id`). Solche Ausgaben zählen nicht gegen das Monatsbudget, sondern gegen die Rücklagen.
 - **Fixkosten-Historie**: Feste Einnahmen und Fixkosten tragen `valid_from` / `valid_to`. Wird ein Betrag (oder Aktiv-Status) einer Zeile geändert, die schon in einem früheren Monat galt, schließt die App die alte Zeile zum Monatsende des Vormonats und legt eine neue ab dem laufenden Monat an. Der Verlauf vergangener Monate bleibt dadurch korrekt.
 - **Kontostände**: Jedes Konto hat einen `starting_balance` und ein `balance_date` (Stand am Ende dieses Tages). Der aktuelle Stand = Startsaldo + alle Einnahmen auf dem Konto − alle Fixkosten und variablen Ausgaben vom Konto − Sparüberweisungen vom Konto + Sparüberweisungen aufs Konto, jeweils nur für Buchungen nach dem `balance_date` und bis heute (Fixkosten werden pro Monat materialisiert, zukünftige Tage zählen noch nicht). So lässt sich der Stand jederzeit mit der Bank-App vergleichen. Die Konten-Seite zeigt pro Konto den Verlauf mit Zwischenstand.
-- **Sparen als echte Überweisung**: Die Sparregel hat ein Quellkonto (`settings.savings_source_account_id`, Standard Sparkasse) und ein Sparkonto (`settings.savings_account_id`, Standard Revolut Ahorro). Jede Einzahlung belastet das Quellkonto (`savings_transactions.account_id`) und schreibt dem Sparkonto gut; eine Entnahme belastet das Sparkonto und schreibt dem Konto gut, von dem die Ausgabe bezahlt wurde.
+- **Sparen als echte Überweisung**: Die Sparregel hat ein Quellkonto (`settings.savings_source_account_id`, Standard Sparkasse) und ein Sparkonto (`settings.savings_account_id`, Standard Revolut Sparen). Jede Einzahlung belastet das Quellkonto (`savings_transactions.account_id`) und schreibt dem Sparkonto gut; eine Entnahme belastet das Sparkonto und schreibt dem Konto gut, von dem die Ausgabe bezahlt wurde.
+- **Schulden mit Raten**: `debts.installments` ist die Anzahl der Raten, `debts.paid_installments` wie viele davon schon bezahlt sind. Offen ist `amount − amount × paid_installments / installments`; sind alle Raten bezahlt (oder der Haken gesetzt), gilt die Schuld als beglichen. Übersicht und Schulden-Seite zeigen nur den offenen Rest.
 - **Währung** immer im deutschen Format (`1.234,56 €`), Datumsformat je nach Sprache (`13.09.2026` / `09/13/2026`).
+- **Hilfe**: Das „?“ oben rechts öffnet eine kurze Anleitung zu jeder Seite (Texte in `lib/i18n/*.json` unter `help.*`).
+- **Erste Einrichtung**: „Einrichten ✨“ im Header (und die Willkommens-Karte auf der Übersicht, solange noch keine festen Einnahmen/Fixkosten existieren) startet einen geführten Rundgang in fünf Schritten – Kontostände, Einnahmen, Fixkosten, Schulden, Sparregel. Eine feste Leiste unter dem Header sagt auf jeder Seite, was einzutragen ist, und zeigt live, wie viel schon da ist. Fortschritt, „Später“ und „Fertig“ liegen in `localStorage` (`finanzplaner.onboarding`, pro Gerät); Logik in [`lib/onboarding.tsx`](lib/onboarding.tsx), UI in `components/onboarding/`.
 
 ## Struktur
 

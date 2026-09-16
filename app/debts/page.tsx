@@ -5,7 +5,7 @@ import { Check, Plus } from "lucide-react";
 import type { Debt, DebtDirection } from "@/lib/data/types";
 import { useI18n } from "@/lib/i18n";
 import { useData, useStore } from "@/lib/store";
-import { sum } from "@/lib/calc";
+import { debtIsSettled, debtOpenAmount, debtPaidInstallments, debtsOpenTotal } from "@/lib/calc";
 import { formatDate, todayISO } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
@@ -25,8 +25,8 @@ export default function DebtsPage() {
   const section = (direction: DebtDirection) => {
     const rows = data.debts
       .filter((d) => d.direction === direction)
-      .sort((a, b) => Number(a.paid) - Number(b.paid) || (a.due_date ?? "9999") .localeCompare(b.due_date ?? "9999"));
-    const openTotal = sum(rows.filter((d) => !d.paid).map((d) => d.amount));
+      .sort((a, b) => Number(debtIsSettled(a)) - Number(debtIsSettled(b)) || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+    const openTotal = debtsOpenTotal(rows);
     const isOwe = direction === "ana_owes";
     const tone = isOwe ? "text-danger" : "text-income-dark";
     const soft = isOwe ? "bg-danger-soft" : "bg-income-soft";
@@ -50,11 +50,15 @@ export default function DebtsPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {rows.map((d) => {
-              const overdue = !d.paid && d.due_date !== null && d.due_date < today;
+              const settled = debtIsSettled(d);
+              const overdue = !settled && d.due_date !== null && d.due_date < today;
+              const paidInst = debtPaidInstallments(d);
+              const partial = !settled && d.installments !== null && paidInst > 0;
               const metaParts = [
                 d.note,
                 d.due_date ? `${t("debts.due")} ${formatDate(d.due_date, lang)}` : null,
                 d.installments ? t("debts.installmentsInfo", { n: d.installments, amount: formatMoney(d.amount / d.installments) }) : null,
+                partial ? `${t("debts.installmentsProgress", { paid: paidInst, n: d.installments! })} (${t("common.total")} ${formatMoney(d.amount)})` : null,
               ].filter(Boolean);
               return (
                 <ListRow
@@ -62,20 +66,26 @@ export default function DebtsPage() {
                   icon={isOwe ? "🤝" : "💌"}
                   title={d.person}
                   meta={metaParts.join(" · ")}
-                  amount={d.amount}
-                  amountClass={d.paid ? "text-ink-muted" : tone}
-                  muted={d.paid}
+                  amount={settled ? d.amount : debtOpenAmount(d)}
+                  amountClass={settled ? "text-ink-muted" : tone}
+                  muted={settled}
                   badge={overdue ? <span className="rounded-full bg-danger-soft px-2 py-0.5 text-[10px] font-bold text-danger">{t("debts.overdue")}</span> : undefined}
                   onClick={() => setModal({ row: d, direction })}
                   right={
                     <button
                       type="button"
                       role="checkbox"
-                      aria-checked={d.paid}
+                      aria-checked={settled}
                       aria-label={t("debts.paid")}
-                      onClick={() => void updateDebt(d.id, { paid: !d.paid })}
+                      onClick={() =>
+                        void updateDebt(
+                          d.id,
+                          // Ticking settles everything; unticking reopens the debt and resets the installment progress.
+                          settled ? { paid: false, paid_installments: 0 } : { paid: true, paid_installments: d.installments ?? 0 },
+                        )
+                      }
                       className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 transition ${
-                        d.paid ? "border-income-dark bg-income-dark text-white" : "border-line bg-card text-transparent hover:border-income-dark"
+                        settled ? "border-income-dark bg-income-dark text-white" : "border-line bg-card text-transparent hover:border-income-dark"
                       }`}
                     >
                       <Check className="h-4 w-4" strokeWidth={3} />

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ChevronRight, HandCoins, Landmark, PiggyBank, Plus, Receipt, TrendingUp, TriangleAlert, Wallet } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useData } from "@/lib/store";
-import { accountBalance, monthSummary, savingsBalance, sum, variableForMonth } from "@/lib/calc";
+import { accountBalance, debtsOpenTotal, monthSummary, savingsBalance, variableForMonth } from "@/lib/calc";
 import { currentMonthKey, formatDateShort, formatMonth } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { categoryName } from "@/lib/store";
@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/Modal";
 import { ListRow } from "@/components/ui/ListRow";
 import { VariableExpenseForm } from "@/components/forms/VariableExpenseForm";
 import { SpendFromSavingsForm } from "@/components/forms/SavingsForms";
+import { WelcomeCard } from "@/components/onboarding/WelcomeCard";
 
 export default function DashboardPage() {
   const { t, lang } = useI18n();
@@ -32,13 +33,14 @@ export default function DashboardPage() {
   const text = { good: "text-income-dark", warn: "text-warn", danger: "text-danger" }[tone];
 
   const recent = [...variableForMonth(data, key).all].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 5);
-  const open = data.debts.filter((d) => !d.paid);
-  const iOwe = sum(open.filter((d) => d.direction === "ana_owes").map((d) => d.amount));
-  const owedToMe = sum(open.filter((d) => d.direction === "owed_to_ana").map((d) => d.amount));
+  const iOwe = debtsOpenTotal(data.debts.filter((d) => d.direction === "ana_owes"));
+  const owedToMe = debtsOpenTotal(data.debts.filter((d) => d.direction === "owed_to_ana"));
 
   return (
     <>
       <PageHeader title={t("dashboard.greeting")} subtitle={formatMonth(key, lang)} />
+
+      <WelcomeCard />
 
       <div className="grid grid-cols-2 gap-3">
         <StatTile label={t("dashboard.income")} value={s.income} tone="income" icon={<TrendingUp className="h-4 w-4" />} />
@@ -53,6 +55,7 @@ export default function DashboardPage() {
           {t("common.details")} <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
+      {data.accounts.length === 0 && <p className="px-1 text-sm text-ink-soft">{t("accounts.empty")}</p>}
       <div className="grid gap-2 sm:grid-cols-3 sm:gap-3">
         {data.accounts.map((a) => {
           const b = accountBalance(data, a.id);

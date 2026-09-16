@@ -1,6 +1,7 @@
 import type {
   AppData,
   Category,
+  Debt,
   ExpenseVariable,
   FixedRow,
   Id,
@@ -229,6 +230,33 @@ function todayKeyStart() {
 
 export function expenseById(data: AppData, id: Id): ExpenseVariable | undefined {
   return data.expensesVariable.find((e) => e.id === id);
+}
+
+// ---------------------------------------------------------------------------
+// Debts
+// ---------------------------------------------------------------------------
+
+/** Installments settled so far, clamped to the installment count. */
+export function debtPaidInstallments(d: Debt): number {
+  if (!d.installments) return 0;
+  return Math.min(Math.max(0, Math.round(d.paid_installments || 0)), d.installments);
+}
+
+/** True when the debt is settled: ticked as paid, or every installment is paid. */
+export function debtIsSettled(d: Debt): boolean {
+  return d.paid || (d.installments !== null && debtPaidInstallments(d) >= d.installments);
+}
+
+/** What is still open on a debt: the full amount minus the installments already paid. */
+export function debtOpenAmount(d: Debt): number {
+  if (debtIsSettled(d)) return 0;
+  if (!d.installments) return d.amount;
+  return round2(d.amount - (d.amount * debtPaidInstallments(d)) / d.installments);
+}
+
+/** Sum of everything still open across the given debts. */
+export function debtsOpenTotal(debts: Debt[]): number {
+  return sum(debts.map(debtOpenAmount));
 }
 
 // ---------------------------------------------------------------------------

@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   title: "Finanzplaner",
   description: "Persönlicher Finanzplaner",
   robots: { index: false, follow: false, nocache: true },
+  // "Add to Home Screen" on iPhone: own name, no Safari chrome.
+  appleWebApp: { capable: true, title: "Finanzplaner", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

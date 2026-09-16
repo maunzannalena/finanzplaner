@@ -24,7 +24,7 @@ export interface Settings {
   language: Language;
   /** Account the monthly set-aside is taken from (default: Sparkasse). */
   savings_source_account_id: Id | null;
-  /** Account that holds the savings (default: Revolut Ahorro). */
+  /** Account that holds the savings (default: Revolut Sparen). */
   savings_account_id: Id | null;
 }
 
@@ -73,6 +73,8 @@ export interface Debt {
   note: string;
   due_date: string | null;
   installments: number | null;
+  /** How many installments are already settled (only meaningful when `installments` is set). */
+  paid_installments: number;
   paid: boolean;
 }
 

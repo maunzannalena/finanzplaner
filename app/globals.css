@@ -80,6 +80,11 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
+/*
+ * `backwards`, not `both`: with `both` the final keyframe's `transform` would
+ * stay applied forever, and any transform on an ancestor turns `position: fixed`
+ * descendants (modals, sheets) into being positioned inside that ancestor.
+ */
 .animate-rise {
-  animation: rise 0.18s ease-out both;
+  animation: rise 0.18s ease-out backwards;
 }

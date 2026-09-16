@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   CalendarDays,
+  Coins,
   Ellipsis,
   HandCoins,
   House,
@@ -20,6 +21,9 @@ import {
 } from "lucide-react";
 import { useI18n, type TKey } from "@/lib/i18n";
 import { useStore } from "@/lib/store";
+import { CoachBar } from "@/components/onboarding/CoachBar";
+import { OnboardingButton } from "@/components/onboarding/OnboardingButton";
+import { HelpGuide } from "./HelpGuide";
 import { LanguageToggle } from "./LanguageToggle";
 
 type IconType = typeof House;
@@ -48,7 +52,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useI18n();
   const { loading, error, data, clearError, mode } = useStore();
-  const [moreOpen, setMoreOpen] = useState(false);
+  // The "More" sheet remembers the route it was opened on, so any navigation
+  // (link, back button) closes it without an effect. Escape closes it too.
+  const [moreOpenedOn, setMoreOpenedOn] = useState<string | null>(null);
+  const moreOpen = moreOpenedOn === pathname;
+  const setMoreOpen = (open: boolean) => setMoreOpenedOn(open ? pathname : null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMoreOpenedOn(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const current = NAV.find((n) => isActive(n.href));
@@ -61,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Sidebar (desktop) */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-card/70 px-4 py-6 md:flex">
         <Link href="/" className="mb-8 flex items-center gap-3 px-2">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-xl shadow-card">🪙</span>
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-ink shadow-card" aria-hidden="true"><Coins className="h-6 w-6" strokeWidth={2.25} /></span>
           <span className="text-lg font-extrabold tracking-tight">Finanzplaner</span>
         </Link>
         <nav className="flex flex-col gap-1">
@@ -88,9 +102,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 border-b border-line bg-cream/90 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary text-base md:hidden">🪙</span>
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary text-ink md:hidden" aria-hidden="true"><Coins className="h-5 w-5" strokeWidth={2.25} /></span>
               <span className="truncate text-base font-extrabold md:text-lg">
-                <span className="md:hidden">Finanzplaner</span>
+                {/* Below 360px the logo alone identifies the app; the text would crowd the buttons. */}
+                <span className="hidden min-[360px]:inline md:hidden">Finanzplaner</span>
                 <span className="hidden md:inline">{current ? t(current.key) : "Finanzplaner"}</span>
               </span>
             </div>
@@ -99,6 +114,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <span className="hidden rounded-full bg-warn-soft px-2.5 py-1 text-xs font-bold text-warn sm:inline">{t("shell.demo")}</span>
               )}
               <LanguageToggle />
+              <OnboardingButton />
+              <HelpGuide />
             </div>
           </div>
         </header>
@@ -127,9 +144,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="text-sm font-semibold">{loading ? t("shell.loading") : t("shell.loadFailed")}</span>
             </div>
           ) : (
-            <div key={pathname} className="animate-rise">
-              {children}
-            </div>
+            <>
+              <CoachBar />
+              <div key={pathname} className="animate-rise">
+                {children}
+              </div>
+            </>
           )}
         </main>
 
@@ -150,7 +170,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
             <button
               type="button"
-              onClick={() => setMoreOpen((v) => !v)}
+              onClick={() => setMoreOpen(!moreOpen)}
               className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-bold ${moreActive || moreOpen ? "text-primary-dark" : "text-ink-muted"}`}
             >
               <span className={`grid h-8 w-12 place-items-center rounded-full ${moreActive || moreOpen ? "bg-primary-soft" : ""}`}>
@@ -163,25 +183,27 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {/* "More" sheet (mobile) */}
         {moreOpen && (
-          <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
+          <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)} role="dialog" aria-modal="true" aria-label={t("nav.more")}>
             <div className="absolute inset-0 bg-ink/30" />
             <div
-              className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-float animate-rise"
+              className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-3xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-float animate-rise"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-line" />
-              <div className="grid grid-cols-2 gap-3">
+              {/* One column below 360px so long labels ("Einstellungen") still fit next to their icon. */}
+              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
                 {secondary.map(({ href, key, icon: Icon }) => (
                   <Link
                     key={href}
                     href={href}
                     onClick={() => setMoreOpen(false)}
-                    className={`flex items-center gap-3 rounded-2xl border border-line px-4 py-4 font-bold ${
+                    className={`flex min-w-0 items-center gap-2.5 rounded-2xl border border-line px-3.5 py-4 font-bold ${
                       isActive(href) ? "bg-primary-soft text-primary-dark" : "bg-cream text-ink"
                     }`}
                   >
-                    <Icon className="h-5 w-5" strokeWidth={2.25} />
-                    {t(key)}
+                    {/* shrink-0: on 320px screens the long "Einstellungen" label would otherwise squash the icon to 0 width */}
+                    <Icon className="h-5 w-5 shrink-0" strokeWidth={2.25} />
+                    <span className="truncate text-[15px]">{t(key)}</span>
                   </Link>
                 ))}
               </div>

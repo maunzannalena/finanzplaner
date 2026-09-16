@@ -5,6 +5,7 @@ import type { FixedRow } from "@/lib/data/types";
 import { useI18n } from "@/lib/i18n";
 import { useData, useStore, type FixedKind } from "@/lib/store";
 import { amountToInput, parseAmount } from "@/lib/format";
+import { currentMonthKey, monthStart } from "@/lib/dates";
 import { Button } from "@/components/ui/Button";
 import { AmountInput, Checkbox, Field, FormActions, Select, TextInput } from "@/components/ui/Field";
 import { DeleteButton } from "@/components/ui/DeleteButton";
@@ -57,7 +58,7 @@ export function FixedRowForm({ kind, initial, onClose }: { kind: FixedKind; init
         </Field>
       </div>
       <Checkbox checked={active} onChange={setActive} label={t("form.active")} hint={t("form.activeHint")} />
-      {initial && initial.valid_from < new Date().toISOString().slice(0, 8) + "01" && (
+      {initial && initial.valid_from < monthStart(currentMonthKey()) && (
         <p className="mb-4 rounded-2xl bg-cream px-4 py-3 text-xs text-ink-soft">{t("fixed.historyNote")}</p>
       )}
       {err && <p className="mb-3 text-sm font-semibold text-danger">{err}</p>}

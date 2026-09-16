@@ -28,8 +28,8 @@ export function buildSeed(): AppData {
   return {
     accounts: [
       { id: acc.sparkasse, name: "Sparkasse", starting_balance: 1200, balance_date: balanceDate },
-      { id: acc.revolut, name: "Revolut Personal", starting_balance: 1500, balance_date: balanceDate },
-      { id: acc.ahorro, name: "Revolut Ahorro", starting_balance: 500, balance_date: balanceDate },
+      { id: acc.revolut, name: "Revolut Privat", starting_balance: 1500, balance_date: balanceDate },
+      { id: acc.ahorro, name: "Revolut Sparen", starting_balance: 500, balance_date: balanceDate },
     ],
     categories: [
       { id: cat.essen, name: "Essen" },
@@ -71,8 +71,8 @@ export function buildSeed(): AppData {
       vari("ev-14", "Putzmittel", cat.haushalt, 15, acc.sparkasse, dayInMonth(m(-3), 23)),
     ],
     debts: [
-      { id: "debt-1", direction: "ana_owes", person: "Lisa", amount: 50, note: "Konzertticket", due_date: dayInMonth(m(1), 1), installments: null, paid: false },
-      { id: "debt-2", direction: "owed_to_ana", person: "Max", amount: 120, note: "Ausgeliehen für Fahrradreparatur", due_date: dayInMonth(m(2), 15), installments: 3, paid: false },
+      { id: "debt-1", direction: "ana_owes", person: "Lisa", amount: 50, note: "Konzertticket", due_date: dayInMonth(m(1), 1), installments: null, paid_installments: 0, paid: false },
+      { id: "debt-2", direction: "owed_to_ana", person: "Max", amount: 120, note: "Ausgeliehen für Fahrradreparatur", due_date: dayInMonth(m(2), 15), installments: 3, paid_installments: 1, paid: false },
     ],
     savingsTransactions: [
       // automatic monthly deposits for the past months (10 % of 1.500 €)
